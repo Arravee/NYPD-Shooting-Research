@@ -1,0 +1,101 @@
+---
+title: "NYPD Fatal Shooting Rates"
+author: "--"
+date: "9/2/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages Used
+
+In this report we will use the tidyverse package for R. If you wish to install the package you can visit <https://www.tidyverse.org/packages/> and follow the instructions. 
+
+```{r package call, results = 'hide', error=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+```
+
+## Data Set
+We will start by importing our data set from the source website. We use read_csv() instead of read.csv() as the former is more efficient when handling a large csv file. 
+
+Our csv file contains data on shootings withing the city of New York from 2006 to the end of 2020. This data is manually extracted every quarter by the Office of Management Analysis and Planning and is available on the NYPD website. Each row represents a separate shooting and includes information about the event, location, time of occurrence and information related to suspect and victim demographics. 
+
+Using the spec function we can see the specific categories contained within the data set and utilizing head() we can get a brief preview of the data set. 
+
+```{r import dataset, results = 'hide', error=FALSE, warning=FALSE, message=FALSE}
+url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+nypd_shooting_init_dataset <- read_csv(url_in, na = '')
+```
+
+```{r initial summary}
+spec(nypd_shooting_init_dataset)
+head(nypd_shooting_init_dataset)
+```
+
+## Cleaning the Data set
+
+For this report we are looking at the fatality rates of the various shootings over time and by year. 
+
+To start out we will get rid of columns that will not be used in our analyses such as INCIDENT_KEY, PERP_RACE, LATITUDE, LONGITIUDE, etc using the dplyr package which is included in tinyverse. We will check the new data set using head() and summary(). 
+
+We will clean the data in two separate ways for the purpose of our analysis. First we will look at the overall rate of shootings being fatal over the entire time period (2006 - 2020). To do this we will group the data by borough and then calculate the overall frequency of a shooting resulting in a fatality. 
+
+After this we will go back to our initially modified data set and analyze the trend of fatal shooting rates by the year. First we will clean up the OCCUR_DATE column by grouping the dates by year.Then we will get the frequency per year per borough and plot them as a line graph. 
+
+```{r initial clean}
+fatality_dataset <- nypd_shooting_init_dataset %>% select('BORO', 'STATISTICAL_MURDER_FLAG', 'OCCUR_DATE')
+```
+
+```{r check intitial clean}
+head(fatality_dataset)
+summary(fatality_dataset)
+```
+
+
+## Rate a shooting was Fatal in each Borough (2006 -2020)
+
+```{r b v f, error=FALSE, warning=FALSE, message=FALSE}
+fatality_by_boro_dataset <-  fatality_dataset %>%  group_by(BORO, STATISTICAL_MURDER_FLAG) %>%   summarise(n = n()) %>%
+  mutate(freq = n / sum(n))
+fatality_by_boro_dataset <-  fatality_by_boro_dataset[fatality_by_boro_dataset$STATISTICAL_MURDER_FLAG != FALSE, ]
+fatality_by_boro_dataset
+```
+```{r b v f plot, echo = FALSE, fig.align = "center"}
+ggplot(data=fatality_by_boro_dataset, aes(x = BORO, y = freq, color = BORO)) + ggtitle('Probability Shooting Resulted in Fatality in each Borough') + 
+theme(plot.title = element_text(size=15, face="bold", hjust = 0), legend.title=element_blank()) +labs(x="New York City Boroughs", y = 'Probability Shooting Resulted in Fatality') +
+theme(plot.background = element_rect(fill = 'grey')) + geom_point(size = 3) + geom_text(aes(label=round(freq,3)),hjust=0, vjust=-1) + ylim(0,.25) #+ geom_segment( aes(xend=BORO, y = 0, yend=freq), size = 2) 
+```
+
+## Rate a shooting was Fatal in each Borough per year (2006 - 2020)
+
+```{r bv y v f, error=FALSE, warning=FALSE, message=FALSE}
+fatality_by_by_dataset <- fatality_dataset
+fatality_by_by_dataset$YEAR <- format(as.Date(fatality_by_by_dataset$OCCUR_DATE, format="%m/%d/%Y"),"%Y")
+fatality_by_by_dataset <- select(fatality_by_by_dataset, -OCCUR_DATE)
+fatality_by_by_dataset <-  fatality_by_by_dataset %>%  group_by(BORO, YEAR, STATISTICAL_MURDER_FLAG) %>%   summarise(n = n()) %>%
+  mutate(freq = n / sum(n))
+fatality_by_by_dataset <-  fatality_by_by_dataset[fatality_by_by_dataset$STATISTICAL_MURDER_FLAG != FALSE, ] 
+head(fatality_by_by_dataset)
+```
+
+```{r b v y v f plot, echo = FALSE, fig.align = "center"}
+ggplot(data = fatality_by_by_dataset, aes(YEAR, freq, group = BORO, colour=BORO))+
+  geom_line(size = 1) +  ggtitle("Shootings Resulting in Fatality") +
+  labs(x="YEAR", y = 'Probability Shooting Resulted in Fatality') + theme_linedraw() + theme(plot.background = element_rect(fill = 'grey')) + theme(plot.title = element_text(size=15, face="bold", hjust = .5)) + ylim(0,.35)  
+```
+
+## Results
+From our data we can see a few trends. The first is that the Bronx has a relatively stable probability, from 2007 - 2020, for a shooting to result in a fatality. Another interesting trend we notice is that in 2020 all the boroughs, excluding Staten Island, have a similar probability of a shooting being fatal. Staten Island in 2020, on the other hand, actually has the highest value seen in the 15 year period for the likelihood of a shooting resulting in a fatality. Due to hospitals being overrun and at maximum capacity during the COVID-19 pandemic, we could expect there to be a rise in the fatality rates, however we only see that with one borough. Finally we can observe that in 2012/2013 all the boroughs either dipped in probability or stayed flat. This is an event that we see only one other time from the beginning of our data set in 2006/2007. 
+
+
+## Bias and Conclusion
+As someone from the suburbs, I have a preconceived bias regarding the safety of big cities, especially New York. If I only looked at the average over the fifteen years of data, I could quickly come to the conclusion that all areas of the city have a similar rate of shootings being fatal. However, to counter this I looked year by year and this shows us that there are trends in each borough and that they are not one in the same. Another potential source of bias is how they defined a shooting being fatal. Does it count if the individual died on the operating table, due to surgical error, after they were brought to the nearby trauma center/emergency room? What if the shooting resulted in infection which then later killed the victim? If there is a borough with more experienced/well equipped trauma centers, relative to the others, we can expect said borough to have less surgical errors when treating victims and therefore less deaths. Without knowing the criteria and methodology for categorizing certain variables it is possible that bias has creeped in.
+
+From the data we can see that over the last 15 years a shooting in any borough has an equal chance of resulting in a fatality. However by delving deeper into the data we can see large variations year by year for boroughs such as Staten Island, while others like the Bronx are relatively stable. We can further research this topic by looking at prominent events occurring in those ares throughout the time period, number of trauma centers/ers, capacity and quality of said trauma centers/ers, and the average response time of police/emergency services to the crime. 
+
+
+
